@@ -1,7 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
-from PIL import Image, ImageChops, ImageEnhance
-import io
+from PIL import Image, ImageChops
+import io, os
 
 app = FastAPI()
 
@@ -9,23 +9,33 @@ app = FastAPI()
 async def analyze(file: UploadFile = File(...)):
     try:
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
 
-        # Simple analysis: Error Level Analysis (ELA)
+        # Save and reload with lower quality
         temp_path = "temp.jpg"
-        ela_path = "ela.jpg"
         image.save(temp_path, "JPEG", quality=90)
-        ela_img = Image.open(temp_path)
-        diff = ImageChops.difference(image, ela_img)
-        extrema = diff.getextrema()
-        max_diff = max([ex[1] for ex in extrema])
+        compressed = Image.open(temp_path)
 
-        manipulated = max_diff > 20  # simple threshold
+        # Difference
+        diff = ImageChops.difference(image, compressed)
+        extrema = diff.getextrema()
+
+        # extrema = [(minR, maxR), (minG, maxG), (minB, maxB)]
+        max_diff = max([channel[1] for channel in extrema])
+
+        manipulated = max_diff > 20
         report = {
             "manipulated": manipulated,
-            "ela_score": max_diff,
-            "details": "High error level suggests manipulation" if manipulated else "No clear manipulation detected"
+            "ela_score": int(max_diff),
+            "details": "High error level suggests manipulation"
+            if manipulated
+            else "No clear manipulation detected",
         }
+
+        # cleanup
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
         return JSONResponse(content=report)
 
     except Exception as e:
