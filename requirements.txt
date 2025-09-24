@@ -1,6 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pillow
 python-multipart
 pydantic
-
